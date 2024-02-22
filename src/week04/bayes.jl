@@ -40,7 +40,13 @@ density!(logistic.(chain_df[!, :θ]), label="Posterior θ", xlabel="θ", ylabel=
 # add true theta of 0.8
 vline!([0.8], label="True θ", color=:black, linestyle=:dash)
 
-
+# plot distribution of heads in posterior
+real_value = sum(h)
+posteror_preds = rand(Binomial(N, logistic(mean(chain_df[!, :θ]))), 2_000)
+histogram(posteror_preds, label="Posterior Predictions", bar_width=0.8, xlabel="Heads", ylabel="Frequency", title="Posterior Predictions", color=:purple, fill=(0, 0.3),bar_edges=false)
+# rotate the numbers on the x-axis
+xticks!(0:1:N, rotation=45)
+vline!([real_value], label="True Value", color=:red)
 
 
 @model function memory_bernoulli(n::Int, h::Vector{Int}, other::Vector{Int})
