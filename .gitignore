@@ -52,3 +52,7 @@ rsconnect/
 Manifest.toml
 
 .vscode/
+
+out/
+data/
+chains/

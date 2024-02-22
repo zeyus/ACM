@@ -1,11 +1,11 @@
-using DynamicHMC: NUTS
-using Turing
-using Optim
-using Distributions
+# using LazyArrays
+#using DynamicHMC
+using DataFrames, Optim, Turing
+using FillArrays, Distributions
 using StatsFuns
 using Plots, StatsPlots
-using DataFrames
-using FillArrays
+using Random
+
 
 # Define the Turing model
 @model function example_1(n::Int, h::Vector{Int})
@@ -113,33 +113,33 @@ end
 end
 
 
-
-
 @model function simple_bernoulli_logodds(h::Vector{Union{Missing, T}}, ::Type{T} = Real) where T
     # Prior for θ (on a log odds scale)
     θ ~ Normal(0, 1)
-
+    
     # Likelihood (Bernoulli distribution with logit link)
-    h ~ filldist(BernoulliLogit(θ), size(h, 2))
-    # for trial in 1:length(h)
-    #     h[trial] ~ BernoulliLogit(θ)
-    # end
+    # DynamicPPL.@addlogprob! sum(logpdf.(BernoulliLogit.(θ), h))
+    n = length(h)
+    for trial in 1:n
+        h[trial] ~ BernoulliLogit(θ)
+    end
 
     # Generate quantities
     θ_prior = logistic(rand(Normal(0, 1)))
     θ_posterior = logistic(θ)
     prior_preds ~ Binomial(n, θ_prior)
-    posterior_preds ~ Binomial(n, logistic(θ))
+    posterior_preds ~ Binomial(n, θ_posterior)
 
-    return θ_prior, θ_posterior, prior_preds, posterior_preds
+    # return θ_prior, θ_posterior, prior_preds, posterior_preds
 end
 
 # Example usage
 n = 100  # Number of trials
 h = Vector{Union{Missing,Int}}(undef, n)
 model = simple_bernoulli_logodds(h, Int)
-chains = sample(model, NUTS(1000, 0.99), MCMCThreads(), 2000, 2)
+# dynamic_nuts = externalsampler(DynamicHMC.NUTS())
+chains = sample(model, Turing.NUTS(1000, 0.99), MCMCThreads(), 2_000, 4)
 
 # Plot the results
 plot(chains)
-plot_sampler(chains)
+chains
