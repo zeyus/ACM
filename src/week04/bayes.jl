@@ -1,30 +1,46 @@
 # using LazyArrays
 #using DynamicHMC
-using DataFrames, Optim, Turing
+using CSV, DataFrames
+using Optim, Turing
 using FillArrays, Distributions
 using StatsFuns
 using Plots, StatsPlots
 using Random
 
+# read simdata/W3_randomnoise.csv into a dataframe
+df = DataFrame(CSV.File("simdata/W3_randomnoise.csv"))
 
 # Define the Turing model
-@model function example_1(n::Int, h::Vector{Int})
-    # Prior for θ (log odds scale)
+@model function simple_b_logodds(h; N::Int)
     θ ~ Normal(0, 1)
-    
-    # Likelihood: Bernoulli distribution with logit link
-    for i in 1:n
-        h[i] ~ BernoulliLogit(θ)
-    end
-    
-    # Generate quantities
-    θ_prior = logistic(rand(Normal(0, 1)))
-    θ_posterior = logistic(θ)
-    prior_preds = rand(Binomial(n, θ_prior))
-    posterior_preds = rand(Binomial(n, logistic(θ)))
-    
-    return θ_prior, θ_posterior, prior_preds, posterior_preds
+    h ~ filldist(BernoulliLogit(θ), N)
+    return h
 end
+
+# only include noise == 0 and rate == 0.8
+df1 = filter(row -> row.noise == 0 && row.rate == 0.8, df)
+
+# convert the dataframe to a vector
+h = df1[!, :choice]
+N = length(h)
+
+prior_draws = sample(simple_b_logodds(missing; N=N), Prior(), 2_000)
+
+# run the model
+model = simple_b_logodds(h; N=N)
+chains = sample(model, NUTS(1_000, 0.99; max_depth=20), MCMCThreads(), 2_000, 2)
+
+chain_df = DataFrame(chains)
+prior_df = DataFrame(prior_draws)
+# plot prior theta
+density(logistic.(prior_df[!, :θ]), label="Prior θ", xlabel="θ", ylabel="Frequency", title="Prior θ", color=:blue, fill=(0, 0.3))
+# plot posterior predictions
+density!(logistic.(chain_df[!, :θ]), label="Posterior θ", xlabel="θ", ylabel="Frequency", title="Posterior θ", color=:purple, fill=(0, 0.3))
+
+# add true theta of 0.8
+vline!([0.8], label="True θ", color=:black, linestyle=:dash)
+
+
 
 
 @model function memory_bernoulli(n::Int, h::Vector{Int}, other::Vector{Int})
@@ -47,15 +63,15 @@ end
         h[trial] ~ BernoulliLogit(bias + β * logit(memory[trial]))
     end
 
-    # Generate quantities
-    bias_prior = rand(Normal(0, 0.3))
-    β_prior = rand(Normal(0, 0.5))
-    prior_preds5 = rand(Binomial(n, logistic(bias_prior + β_prior * logit(0.5))))
-    prior_preds7 = rand(Binomial(n, logistic(bias_prior + β_prior * logit(0.7))))
-    prior_preds9 = rand(Binomial(n, logistic(bias_prior + β_prior * logit(0.9))))
-    post_preds5 = rand(Binomial(n, logistic(bias + β * logit(0.5))))
-    post_preds7 = rand(Binomial(n, logistic(bias + β * logit(0.7))))
-    post_preds9 = rand(Binomial(n, logistic(bias + β * logit(0.9))))
+    # # Generate quantities
+    # bias_prior = rand(Normal(0, 0.3))
+    # β_prior = rand(Normal(0, 0.5))
+    # prior_preds5 = rand(Binomial(n, logistic(bias_prior + β_prior * logit(0.5))))
+    # prior_preds7 = rand(Binomial(n, logistic(bias_prior + β_prior * logit(0.7))))
+    # prior_preds9 = rand(Binomial(n, logistic(bias_prior + β_prior * logit(0.9))))
+    # post_preds5 = rand(Binomial(n, logistic(bias + β * logit(0.5))))
+    # post_preds7 = rand(Binomial(n, logistic(bias + β * logit(0.7))))
+    # post_preds9 = rand(Binomial(n, logistic(bias + β * logit(0.9))))
 
     return bias_prior, β_prior, prior_preds5, post_preds5, prior_preds7, post_preds7, prior_preds9, post_preds9
 end
