@@ -9,14 +9,6 @@ using Turing: ForwardDiff
 using ReverseDiff
 
 
-# function noisy_softmax(x::Vector{Float64}, β::Float64)
-#     u = maximum(x)
-#     xt = x .- u
-#     lmul!(inv(sum(xt)), xt)
-#     return xt
-# end
-
-
 # Rescorla-Wagner model
 # h is the result of selected hands (0 or 1)
 # N is the number of trials
@@ -25,23 +17,23 @@ using ReverseDiff
 # real_p is the real probability of the coin being in hand 1 (default is 0.8)
 @model function RWCoins(h::Union{Missing, Vector{Union{Missing, Int}}}, ::Type{T} = Float64; N::Int, reward::Matrix{Int}) where T
     # Priors
-    α ~ Normal(0, 0.5)  # learning rate
-    β ~ LogNormal(0, 0.2)  # inverse temperature (noise/explore-exploit tradeoff)
+    α ~ LogNormal(0, 0.3)  # learning rate
+    β ~ LogNormal(0, 0.5)  # inverse temperature (noise/explore-exploit tradeoff)
     
-    v = Vector{Union{Float64}}([0.0, 0.0])
+    v = T(0.0)
     if ismissing(h)
         h = Vector{Union{Missing, Int}}(missing, N)
     end
 
-    pred_err::Float64 = 0.0
-    p::Vector{Float64} = [0.5, 0.5]
+    pred_err::T = 0.0
+    pₜ = 0.5
+    hₜ::T = rand(Bernoulli(1/(1+exp(-β * pₜ))))
+    v = v + α * pred_err
     for t in 1:N
-        p = softmax(v)
-        logit_p = β + log(p[2] / p[1])
-        h[t] ~ BernoulliLogit(logit_p)
-        i = ReverseDiff.value(h[t]) + 1
-        pred_err += reward[t, i] - v[i]
-        v[i] += ReverseDiff.value(α) * pred_err 
+        
+        
+        
+        
     end
     return h, α, β
 end
@@ -56,30 +48,35 @@ end
 # N = length(h)
 
 # run the model (sim)
-N = 1000
-hand_p = 0.7
-rh = rand(Bernoulli(hand_p), N)
+N = 120
+hand_p = logit(0.7)
+rh = rand(BernoulliLogit(hand_p), N)
 lh = 1 .- rh
 reward = [lh rh]
 
 h_missing = Vector{Union{Missing, Int}}(missing, N)
 h, true_α, true_β = RWCoins(h_missing; N=N, reward=reward)()
-chains_prior = sample(RWCoins(h_missing; N=N, reward=reward), Prior(), 3_000)
+chains_prior = sample(RWCoins(h_missing; N=N, reward=reward), Prior(), 5_000)
 chains_prior_df = DataFrame(chains_prior)
 # parameter recovery
 model = RWCoins(h; N=N, reward=reward)
-chains = sample(model, NUTS(1_000, 0.99; max_depth=20, adtype=Turing.AutoReverseDiff(true)), MCMCThreads(), 3_000, 2)
+chains = sample(model, NUTS(2_500, 0.99; max_depth=20, adtype=Turing.AutoReverseDiff(true)), MCMCThreads(), 5_000, 4)
+# single thread for debugging
+# chains = sample(model, NUTS(1_000, 0.99; max_depth=20, adtype=Turing.AutoReverseDiff(true)), 3_000)
+
 chain_df = DataFrame(chains)
 print("True α:", true_α, ", True β:", true_β, "\n")
 
-density(chain_df[!, :α], label="Posterior α", xlabel="value", ylabel="Frequency", title="Posterior", color=:purple, fill=(0, 0.3))
+density(chain_df[!, :α], label="Posterior α", xlabel="value", ylabel="Frequency", title="Parameters", color=:purple, fill=(0, 0.3))
 density!(chain_df[!, :β], label="Posterior β", color=:blue, fill=(0, 0.3))
 # add priors 
 density!(chains_prior_df[!, :α], label="Prior α", color=:purple, linestyle=:dash)
 density!(chains_prior_df[!, :β], label="Prior β", color=:blue, linestyle=:dash)
 # add true values
-vline!([true_α], label="True α", color=:purple, linestyle=:dash)
-vline!([true_β], label="True β", color=:blue, linestyle=:dash)
+vline!([true_α], label="True α", color=:purple, linestyle=:solid)
+vline!([true_β], label="True β", color=:blue, linestyle=:solid)
 
+# set xlimit 
+xlims!(0, 5)
 
 
