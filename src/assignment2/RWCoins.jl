@@ -25,15 +25,12 @@ using ReverseDiff
         h = Vector{Union{Missing, Int}}(missing, N)
     end
 
-    pred_err::T = 0.0
-    pₜ = 0.5
-    hₜ::T = rand(Bernoulli(1/(1+exp(-β * pₜ))))
-    v = v + α * pred_err
+    pₜ = logit(0.5)
     for t in 1:N
-        
-        
-        
-        
+        h[t] ~ BernoulliLogit(pₜ)
+        hₜ = ReverseDiff.value(h[t]) + 1
+        v = v + α * (reward[t, hₜ] - logistic(pₜ))
+        pₜ = logit(1 / (1 + exp(-β * v)))
     end
     return h, α, β
 end
@@ -48,11 +45,13 @@ end
 # N = length(h)
 
 # run the model (sim)
-N = 120
+N = 300
 hand_p = logit(0.7)
 rh = rand(BernoulliLogit(hand_p), N)
 lh = 1 .- rh
 reward = [lh rh]
+# make zeros -1 (to punish loss)
+# reward = 2 .* reward .- 1
 
 h_missing = Vector{Union{Missing, Int}}(missing, N)
 h, true_α, true_β = RWCoins(h_missing; N=N, reward=reward)()
@@ -60,7 +59,7 @@ chains_prior = sample(RWCoins(h_missing; N=N, reward=reward), Prior(), 5_000)
 chains_prior_df = DataFrame(chains_prior)
 # parameter recovery
 model = RWCoins(h; N=N, reward=reward)
-chains = sample(model, NUTS(2_500, 0.99; max_depth=20, adtype=Turing.AutoReverseDiff(true)), MCMCThreads(), 5_000, 4)
+chains = sample(model, NUTS(1_000, 0.99; max_depth=20, adtype=Turing.AutoReverseDiff(true)), MCMCThreads(), 3_000, 3)
 # single thread for debugging
 # chains = sample(model, NUTS(1_000, 0.99; max_depth=20, adtype=Turing.AutoReverseDiff(true)), 3_000)
 
@@ -77,6 +76,6 @@ vline!([true_α], label="True α", color=:purple, linestyle=:solid)
 vline!([true_β], label="True β", color=:blue, linestyle=:solid)
 
 # set xlimit 
-xlims!(0, 5)
+xlims!(0, 3)
 
 
