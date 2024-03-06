@@ -17,8 +17,8 @@ using ReverseDiff
 # real_p is the real probability of the coin being in hand 1 (default is 0.8)
 @model function RWCoins(h::Union{Missing, Vector{Union{Missing, Int}}}, ::Type{T} = Float64; N::Int, reward::Matrix{Int}) where T
     # Priors
-    α ~ LogNormal(0, 0.3)  # learning rate
-    β ~ LogNormal(0, 0.7)  # inverse temperature (noise/explore-exploit tradeoff)
+    α ~ LogitNormal(0, 1)  # learning rate
+    τ ~ LogNormal(0, 0.7)  # inverse temperature (noise/explore-exploit tradeoff)
     
     v = T(0.0)
     if ismissing(h)
@@ -30,9 +30,9 @@ using ReverseDiff
         h[t] ~ Bernoulli(pₜ)
         hₜ = ReverseDiff.value(h[t]) + 1
         v = v + α * (reward[t, hₜ] - pₜ)
-        pₜ = (1 / (1 + exp(-β * v)))
+        pₜ = (1 / (1 + exp(-τ * v)))
     end
-    return h, α, β
+    return h, α, τ
 end
 # read simdata/W3_randomnoise.csv into a dataframe
 # df = DataFrame(CSV.File("simdata/W3_randomnoise.csv"))
@@ -54,7 +54,7 @@ reward = [lh rh]
 # reward = 2 .* reward .- 1
 
 h_missing = Vector{Union{Missing, Int}}(missing, N)
-h, true_α, true_β = RWCoins(h_missing; N=N, reward=reward)()
+h, true_α, true_τ = RWCoins(h_missing; N=N, reward=reward)()
 chains_prior = sample(RWCoins(h_missing; N=N, reward=reward), Prior(), 5_000)
 chains_prior_df = DataFrame(chains_prior)
 # parameter recovery
@@ -64,16 +64,16 @@ chains = sample(model, NUTS(2_500, 0.99; max_depth=20, adtype=Turing.AutoReverse
 # chains = sample(model, NUTS(1_000, 0.99; max_depth=20, adtype=Turing.AutoReverseDiff(true)), 3_000)
 
 chain_df = DataFrame(chains)
-print("True α:", true_α, ", True β:", true_β, "\n")
+print("True α:", true_α, ", True τ:", true_τ, "\n")
 
 density(chain_df[!, :α], label="Posterior α", xlabel="value", ylabel="Frequency", title="Parameters", color=:purple, fill=(0, 0.3))
-density!(chain_df[!, :β], label="Posterior β", color=:blue, fill=(0, 0.3))
+density!(chain_df[!, :τ], label="Posterior τ", color=:blue, fill=(0, 0.3))
 # add priors 
 density!(chains_prior_df[!, :α], label="Prior α", color=:purple, linestyle=:dash)
-density!(chains_prior_df[!, :β], label="Prior β", color=:blue, linestyle=:dash)
+density!(chains_prior_df[!, :τ], label="Prior τ", color=:blue, linestyle=:dash)
 # add true values
 vline!([true_α], label="True α", color=:purple, linestyle=:solid)
-vline!([true_β], label="True β", color=:blue, linestyle=:solid)
+vline!([true_τ], label="True τ", color=:blue, linestyle=:solid)
 
 # set xlimit 
 xlims!(0, 5)
