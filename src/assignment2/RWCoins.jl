@@ -49,12 +49,13 @@ end
 # N = length(h)
 
 # run the model (sim)
-N_vals = [10, 25, 50, 75, 100, 150, 200, 250, 500, 1000]
+# N_vals = [10, 25, 50, 75, 100, 150, 200, 250, 500, 1000]
+N_vals = [120]
 N_count = length(N_vals)
 hand_p = 0.70
-nsims = 100
+nsims = 5
 # N = 120
-chain_file = "./chains/sim_chains.h5"
+chain_file = "./chains/sim_chains_tmp.h5"
 
 # let's run a bunch of simulations
 true_values = zeros(N_count, nsims, 3)
@@ -89,19 +90,19 @@ for (i, N) in enumerate(N_vals)
         @info "Fitting model..."
         chains = nothing
         with_logger(NullLogger()) do
-            chains = sample(model, NUTS(1_000, 0.99; max_depth=20, adtype=Turing.AutoReverseDiff(true)), MCMCThreads(), 1_000, 4, progress=false, verbose=false)
+            @time chains = sample(model, NUTS(1_500, 0.65; adtype=Turing.AutoReverseDiff(true)), MCMCThreads(), 2_000, 4, progress=false, verbose=false)
         end
         # single thread for debugging
         # chains = sample(model, NUTS(1_000, 0.99; max_depth=20, adtype=Turing.AutoReverseDiff(true)), 3_000)
         # save chains
 
-        @info "Saving chains..."
-        h5open(chain_file, "cw") do file
-            g = create_group(file, "prior_$i-$j")
-            write(g, chains_prior)
-            g = create_group(file, "posterior_$i-$j")
-            write(g, chains)
-        end
+        # @info "Saving chains..."
+        # h5open(chain_file, "cw") do file
+        #     g = create_group(file, "prior_$i-$j")
+        #     write(g, chains_prior)
+        #     g = create_group(file, "posterior_$i-$j")
+        #     write(g, chains)
+        # end
         chain_df = DataFrame(chains)
         posterior_chains[i, j] = chain_df
         # save modes
@@ -110,60 +111,60 @@ for (i, N) in enumerate(N_vals)
         # save plots of prior + posterior
         @info "Saving plots..."
 
-        p = plot(dpi=300)
-        density!(chain_df[!, :α], label="Posterior α", xlabel="value", ylabel="Frequency", title="Parameters", color=:purple, fill=(0, 0.3))
-        density!(chain_df[!, :τ], label="Posterior τ", color=:blue, fill=(0, 0.3))
-        # add priors
-        density!(chains_prior_df[!, :α], label="Prior α", color=:purple, linestyle=:dash)
-        density!(chains_prior_df[!, :τ], label="Prior τ", color=:blue, linestyle=:dash)
-        # add true values
-        vline!([true_α], label="True α", color=:purple, linestyle=:solid)
-        vline!([true_τ], label="True τ", color=:blue, linestyle=:solid)
-        xlims!(0, 3)
-        savefig(p, "./out/posterior_vs_prior_$i-$j.png")
+        # p = plot(dpi=300)
+        # density!(chain_df[!, :α], label="Posterior α", xlabel="value", ylabel="Frequency", title="Parameters", color=:purple, fill=(0, 0.3))
+        # density!(chain_df[!, :τ], label="Posterior τ", color=:blue, fill=(0, 0.3))
+        # # add priors
+        # density!(chains_prior_df[!, :α], label="Prior α", color=:purple, linestyle=:dash)
+        # density!(chains_prior_df[!, :τ], label="Prior τ", color=:blue, linestyle=:dash)
+        # # add true values
+        # vline!([true_α], label="True α", color=:purple, linestyle=:solid)
+        # vline!([true_τ], label="True τ", color=:blue, linestyle=:solid)
+        # xlims!(0, 3)
+        # savefig(p, "./out/posterior_vs_prior_$i-$j.png")
 
     end
     @info "Saving plots for N=$(N)"
     # plot true vs mode for alpha
-    p = plot(dpi=300)
-    scatter!(true_values[i, :, 1], modes_α, label="True vs Mode α", xlabel="True α", ylabel="Mode α", title="True vs Mode α (N=$N)", color=:purple)
-    # add line
-    max_x = maximum([maximum(true_values[i, :, 1]), maximum(modes_α)])
-    max_y = maximum([maximum(true_values[i, :, 1]), maximum(modes_α)])
-    plot!([0, max_x], [0, max_y], label="y=x", color=:black)
-    # save to png
-    savefig(p, "./out/true_vs_mode_alpha_N$N.png")
+    # p = plot(dpi=300)
+    # scatter!(true_values[i, :, 1], modes_α, label="True vs Mode α", xlabel="True α", ylabel="Mode α", title="True vs Mode α (N=$N)", color=:purple)
+    # # add line
+    # max_x = maximum([maximum(true_values[i, :, 1]), maximum(modes_α)])
+    # max_y = maximum([maximum(true_values[i, :, 1]), maximum(modes_α)])
+    # plot!([0, max_x], [0, max_y], label="y=x", color=:black)
+    # # save to png
+    # savefig(p, "./out/true_vs_mode_alpha_N$N.png")
 
-    # plot true vs mode for tau
-    p = plot(dpi=300)
-    scatter!(true_values[i, :, 2], modes_τ, label="True vs Mode τ", xlabel="True τ", ylabel="Mode τ", title="True vs Mode τ (N=$N)", color=:blue)
-    # add line
-    max_x = maximum([maximum(true_values[i, :, 2]), maximum(modes_τ)])
-    max_y = maximum([maximum(true_values[i, :, 2]), maximum(modes_τ)])
-    plot!([0, max_x], [0, max_y], label="y=x", color=:black)
-    # save to png
-    savefig(p, "./out/true_vs_mode_tau_N$N.png")
+    # # plot true vs mode for tau
+    # p = plot(dpi=300)
+    # scatter!(true_values[i, :, 2], modes_τ, label="True vs Mode τ", xlabel="True τ", ylabel="Mode τ", title="True vs Mode τ (N=$N)", color=:blue)
+    # # add line
+    # max_x = maximum([maximum(true_values[i, :, 2]), maximum(modes_τ)])
+    # max_y = maximum([maximum(true_values[i, :, 2]), maximum(modes_τ)])
+    # plot!([0, max_x], [0, max_y], label="y=x", color=:black)
+    # # save to png
+    # savefig(p, "./out/true_vs_mode_tau_N$N.png")
 end
 
 @info "Done running simulations!"
 # boxplot of true vs mode for alpha and tau
 @info "Calculating parameter recovery values..."
-recovered_values = zeros(N_count, 2, nsims)
-for i in 1:N_count
-    for j in 1:nsims
-        recovered_values[i, 1, j] = mode(posterior_chains[i, j][!, :α]) - true_values[i, j, 1]
-        recovered_values[i, 2, j] = mode(posterior_chains[i, j][!, :τ]) - true_values[i, j, 2]
-    end
-end
-# make a dataframe of all the recovered values
-xN_vals = repeat(string.(repeat(N_vals,2)), inner=nsims)
-xN_vals = categorical(xN_vals)
-levels!(xN_vals, string.(N_vals))
-param = repeat(["α", "τ"], inner=N_count * nsims)
-y_α = reshape(recovered_values[:, 1, :], N_count * nsims)
-y_τ = reshape(recovered_values[:, 2, :], N_count * nsims)
+# recovered_values = zeros(N_count, 2, nsims)
+# for i in 1:N_count
+#     for j in 1:nsims
+#         recovered_values[i, 1, j] = mode(posterior_chains[i, j][!, :α]) - true_values[i, j, 1]
+#         recovered_values[i, 2, j] = mode(posterior_chains[i, j][!, :τ]) - true_values[i, j, 2]
+#     end
+# end
+# # make a dataframe of all the recovered values
+# xN_vals = repeat(string.(repeat(N_vals,2)), inner=nsims)
+# xN_vals = categorical(xN_vals)
+# levels!(xN_vals, string.(N_vals))
+# param = repeat(["α", "τ"], inner=N_count * nsims)
+# y_α = reshape(recovered_values[:, 1, :], N_count * nsims)
+# y_τ = reshape(recovered_values[:, 2, :], N_count * nsims)
 
-df_recovered = DataFrame(N=xN_vals, param=param, value=vcat(y_α, y_τ))
+# df_recovered = DataFrame(N=xN_vals, param=param, value=vcat(y_α, y_τ))
 
 
 
