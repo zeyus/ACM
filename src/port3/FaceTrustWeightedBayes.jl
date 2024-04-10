@@ -45,7 +45,13 @@ include("../LogCommon.jl")
     W2 = (w2-0.5) * 2
 
     # Likelihood
+    for i in 1:NSubjects
+        α = bias + W1 * FirstRating[i, :] + W2 * GroupRating[i, :]
+        β = 2 .*
+        for j in 1:N
 
+        end
+    end
 
 
 
