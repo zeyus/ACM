@@ -31,33 +31,46 @@ include("../LogCommon.jl")
 # we will atempt to predict the second rating given the first rating and the group rating
 # Outcome ≈ bias + W1 * Source1 +W2  * Source2
 # Rating arrays are of size NSubjects x N
-@model function FaceTrustWeightedBayes(FirstRating::Array{Int, 2}, GroupRating::Array{Int, 2}, SecondRating::Array{Int, 2}, w1::Float64, w2::Float64, bias::Real)
+@model function FaceTrustWeightedBayes(FirstRating::Array{Int, 2}, GroupRating::Array{Int, 2}, SecondRating::Array{Int, 2})
     # Group level param
     μ ~ Normal(0, 1)
-    σ ~ LogNormal(0, 1)
-
+    σ ~ Normal(0, 0.2)
     # Individual level param
-    NSubjects = size(FirstRating, 1)
-    N = size(FirstRating, 2)
+    N = size(FirstRating, 1)
+    NRatings = size(FirstRating, 2)
+    logweight1 ~ filldist(Normal(0, 1), N)
 
-    # Priors
-    W1 = (w1-0.5) * 2
-    W2 = (w2-0.5) * 2
+    W1 = logistic.(logweight1 .+ (μ .+ σ .* logweight1))
+    W2 = 1 .- W1
 
-    # Likelihood
-    for i in 1:NSubjects
-        α = bias + W1 * FirstRating[i, :] + W2 * GroupRating[i, :]
-        β = 2 .*
-        for j in 1:N
-
+    β = repeat([2*7], NRatings)
+    for i in 1:N
+        α = W1[i] * FirstRating[i, :] .+ W2[i] .* (GroupRating[i, :] .- 2)
+        for j in 1:NRatings
+            SecondRating[i, j] ~ BetaBinomial(NRatings, 1+α[j], 1+β[j]-α[j])
         end
     end
-
-
-
-
-
-
-    
-
 end
+
+
+@info "Loading data..."
+data = CSV.File("./data/Simonsen_clean.csv") |> DataFrame
+
+NSubj = length(unique(data.ID))
+NTrials = 153
+# convert ratings to matrices by subject
+Tdata = groupby(data, :ID)
+IDs = zeros(Int, NSubj)
+FirstRating = zeros(Int, NSubj, NTrials)
+GroupRating = zeros(Int, NSubj, NTrials)
+SecondRating = zeros(Int, NSubj, NTrials)
+for (i, subdf) in enumerate(Tdata)
+    IDs[i] = subdf.ID[1]
+    FirstRating[i, :] = subdf.FirstRating
+    GroupRating[i, :] = subdf.GroupRating
+    SecondRating[i, :] = subdf.SecondRating
+end
+# run the model
+@info "Running model..."
+model = FaceTrustWeightedBayes(FirstRating, GroupRating, SecondRating)
+chain = sample(model, NUTS(1_500, 0.65; adtype=Turing.AutoReverseDiff(true)), MCMCThreads(), 2_000, 4, progress=true, verbose=true)
