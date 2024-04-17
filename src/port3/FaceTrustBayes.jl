@@ -163,6 +163,8 @@ for μbias in μbiases
     )
 end
 
+
+
 @info "Loading data..."
 data = CSV.File("./data/Simonsen_clean.csv") |> DataFrame
 
